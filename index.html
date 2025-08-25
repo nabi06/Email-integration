@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>NIH RePORTER Scoop</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    input, button { padding: 8px; margin: 4px; }
+    .result { border-bottom: 1px solid #ddd; margin: 10px 0; padding: 10px 0; }
+  </style>
+</head>
+<body>
+  <h1>NIH RePORTER Scoop</h1>
+  <p>Search active and recent NIH-funded projects (via RePORTER API).</p>
+  <label>keywords (e.g., liver organoid, R21)</label><br>
+  <input id="keywords" size="50"><br>
+  <label>fiscal years (e.g., 2024,2025)</label><br>
+  <input id="years" size="20"><br>
+  <label>IC (e.g., NIDDK)</label><br>
+  <input id="ic" size="20"><br><br>
+  <button onclick="doSearch()">Search</button>
+  <div id="results"></div>
+
+<script>
+async function doSearch() {
+  const criteria = {};
+  const kw = document.getElementById('keywords').value.trim();
+  if (kw) criteria.text_search = kw;
+
+  const years = document.getElementById('years').value.trim();
+  if (years) criteria.fiscal_years = years.split(',').map(y => parseInt(y));
+
+  const ic = document.getElementById('ic').value.trim();
+  if (ic) criteria.orgs = [{ org: ic }];
+
+  const payload = { criteria, limit: 5 };
+
+  document.getElementById('results').innerHTML = 'Searching...';
+
+  const res = await fetch('/api/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+
+  if (!data.results) {
+    document.getElementById('results').innerHTML = '<p>No results</p>';
+    return;
+  }
+
+  let html = `<p>Total results: ${data.meta?.total ?? 0}</p>`;
+  for (const r of data.results) {
+    html += `<div class="result">
+      <b>${r.project_title ?? '(no title)'}</b><br>
+      PI: ${r.contact_pi_name ?? 'n/a'}<br>
+      IC: ${r.agency_ic_admin ?? 'n/a'}<br>
+      FY: ${r.fy ?? 'n/a'}<br>
+      <a href="https://reporter.nih.gov/project-details/${r.project_num}" target="_blank">View project</a>
+    </div>`;
+  }
+  document.getElementById('results').innerHTML = html;
+}
+</script>
+</body>
+</html>
