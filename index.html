@@ -2,65 +2,314 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NIH RePORTER Scoop</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 40px; }
-    input, button { padding: 8px; margin: 4px; }
-    .result { border-bottom: 1px solid #ddd; margin: 10px 0; padding: 10px 0; }
+    body { 
+      font-family: Arial, sans-serif; 
+      margin: 40px; 
+      max-width: 800px;
+      margin: 40px auto;
+    }
+    .section { 
+      margin-bottom: 30px; 
+      padding: 20px; 
+      border: 1px solid #ddd; 
+      border-radius: 5px;
+    }
+    input, button { 
+      padding: 10px; 
+      margin: 5px 0; 
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      width: 100%;
+      max-width: 300px;
+    }
+    button { 
+      background: #007bff; 
+      color: white; 
+      cursor: pointer;
+      width: auto;
+      padding: 10px 20px;
+    }
+    button:hover { background: #0056b3; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .hidden { display: none; }
+    .auth-buttons { margin: 10px 0; }
+    .auth-buttons button { margin-right: 10px; }
+    .status { padding: 10px; margin: 10px 0; border-radius: 3px; }
+    .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+    .user-info { background: #f8f9fa; padding: 15px; border-radius: 5px; }
   </style>
 </head>
 <body>
   <h1>NIH RePORTER Scoop</h1>
-  <p>Search active and recent NIH-funded projects (via RePORTER API).</p>
-  <label>keywords (e.g., liver organoid, R21)</label><br>
-  <input id="keywords" size="50"><br>
-  <label>fiscal years (e.g., 2024,2025)</label><br>
-  <input id="years" size="20"><br>
-  <label>IC (e.g., NIDDK)</label><br>
-  <input id="ic" size="20"><br><br>
-  <button onclick="doSearch()">Search</button>
-  <div id="results"></div>
+  <p>Search NIH research projects and get results via email</p>
 
-<script>
-async function doSearch() {
-  const criteria = {};
-  const kw = document.getElementById('keywords').value.trim();
-  if (kw) criteria.text_search = kw;
+  <!-- Authentication Section -->
+  <div id="authSection" class="section">
+    <h3>Authentication</h3>
+    
+    <div>
+      <label>Email:</label><br>
+      <input type="email" id="email" placeholder="Enter your email">
+    </div>
+    
+    <div>
+      <label>Password:</label><br>
+      <input type="password" id="password" placeholder="Enter your password">
+    </div>
+    
+    <div class="auth-buttons">
+      <button onclick="handleAuth('login')">Login</button>
+      <button onclick="handleAuth('register')">Register</button>
+    </div>
+  </div>
 
-  const years = document.getElementById('years').value.trim();
-  if (years) criteria.fiscal_years = years.split(',').map(y => parseInt(y));
+  <!-- User Dashboard -->
+  <div id="userSection" class="section hidden">
+    <h3>User Dashboard</h3>
+    <div class="user-info">
+      <div id="userDetails"></div>
+      <div id="planDetails"></div>
+      <button id="upgradeButton" onclick="upgradeSubscription()" style="display: none;">Upgrade to Pro ($5/month)</button>
+      <button onclick="resetSearches()" style="background: #ffc107; color: #212529; margin-top: 10px;">Reset Searches (Testing)</button>
+      <button onclick="logout()" style="background: #6c757d; margin-top: 10px;">Logout</button>
+    </div>
+  </div>
 
-  const ic = document.getElementById('ic').value.trim();
-  if (ic) criteria.orgs = [{ org: ic }];
+  <!-- Search Section -->
+  <div id="searchSection" class="section hidden">
+    <h3>Search NIH Projects</h3>
+    
+    <div>
+      <label>Keywords:</label><br>
+      <input type="text" id="keywords" placeholder="e.g., diabetes, cancer, AI">
+    </div>
+    
+    <div>
+      <label>Fiscal Years (optional):</label><br>
+      <input type="text" id="years" placeholder="e.g., 2024,2025">
+    </div>
+    
+    <div>
+      <label>Institute/Center (optional):</label><br>
+      <input type="text" id="ic" placeholder="e.g., NIDDK, NCI, NIMH">
+    </div>
+    
+    <button onclick="performSearch()" id="searchButton">Search & Email Results</button>
+  </div>
 
-  const payload = { criteria, limit: 5 };
+  <!-- Status Messages -->
+  <div id="statusMessage"></div>
 
-  document.getElementById('results').innerHTML = 'Searching...';
+  <script>
+    let currentUser = null;
 
-  const res = await fetch('/api/search', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-  const data = await res.json();
+    function showStatus(message, type = 'info') {
+      const statusDiv = document.getElementById('statusMessage');
+      statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+      setTimeout(() => statusDiv.innerHTML = '', 5000);
+    }
 
-  if (!data.results) {
-    document.getElementById('results').innerHTML = '<p>No results</p>';
-    return;
-  }
+    async function handleAuth(action) {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      
+      if (!email || !password) {
+        showStatus('Please fill in both email and password', 'error');
+        return;
+      }
 
-  let html = `<p>Total results: ${data.meta?.total ?? 0}</p>`;
-  for (const r of data.results) {
-    html += `<div class="result">
-      <b>${r.project_title ?? '(no title)'}</b><br>
-      PI: ${r.contact_pi_name ?? 'n/a'}<br>
-      IC: ${r.agency_ic_admin ?? 'n/a'}<br>
-      FY: ${r.fy ?? 'n/a'}<br>
-      <a href="https://reporter.nih.gov/project-details/${r.project_num}" target="_blank">View project</a>
-    </div>`;
-  }
-  document.getElementById('results').innerHTML = html;
-}
-</script>
+      try {
+        showStatus('Processing...', 'info');
+        
+        const response = await fetch('/api/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: action,
+            email: email,
+            password: password
+          })
+        });
+
+        const result = await response.json();
+        
+        if (response.ok) {
+          if (action === 'register') {
+            showStatus('Registration successful! Please login with your credentials.', 'success');
+            // Clear the password field for security
+            document.getElementById('password').value = '';
+            // Don't auto-login after registration
+          } else {
+            currentUser = result.user;
+            showUserDashboard();
+            showStatus('Login successful!', 'success');
+          }
+        } else {
+          showStatus(result.error || `${action} failed`, 'error');
+        }
+      } catch (error) {
+        console.error('Auth error:', error);
+        showStatus('Network error. Please try again.', 'error');
+      }
+    }
+
+    function showUserDashboard() {
+      document.getElementById('authSection').classList.add('hidden');
+      document.getElementById('userSection').classList.remove('hidden');
+      document.getElementById('searchSection').classList.remove('hidden');
+      
+      const userDetails = document.getElementById('userDetails');
+      const planDetails = document.getElementById('planDetails');
+      const upgradeButton = document.getElementById('upgradeButton');
+      
+      userDetails.innerHTML = `<strong>Email:</strong> ${currentUser.email}`;
+      
+      const isFreeTier = currentUser.subscription_status !== 'active';
+      const searchesUsed = currentUser.monthly_searches || 0;
+      const maxSearches = isFreeTier ? 5 : 15;  // Free: 5 searches, Pro: 15 searches
+      const abstractsPerSearch = isFreeTier ? 3 : 10; // Free: 3 abstracts, Pro: 10 abstracts
+      
+      planDetails.innerHTML = `
+        <p><strong>Plan:</strong> ${isFreeTier ? 'Free' : 'Pro ($5/month)'}</p>
+        <p><strong>Searches this month:</strong> ${searchesUsed}/${maxSearches}</p>
+        <p><strong>Abstracts per search:</strong> ${abstractsPerSearch}</p>
+      `;
+      
+      upgradeButton.style.display = isFreeTier ? 'inline-block' : 'none';
+    }
+
+    async function performSearch() {
+      if (!currentUser) {
+        showStatus('Please login first', 'error');
+        return;
+      }
+
+      const keywords = document.getElementById('keywords').value.trim();
+      if (!keywords) {
+        showStatus('Please enter keywords to search', 'error');
+        return;
+      }
+
+      const searchButton = document.getElementById('searchButton');
+      searchButton.disabled = true;
+      searchButton.textContent = 'Searching...';
+
+      try {
+        const criteria = { text_search: keywords };
+        
+        const years = document.getElementById('years').value.trim();
+        if (years) {
+          criteria.fiscal_years = years.split(',').map(y => parseInt(y.trim())).filter(y => !isNaN(y));
+        }
+        
+        const ic = document.getElementById('ic').value.trim();
+        if (ic) {
+          criteria.agency_ic_admin = [ic.toUpperCase()];
+        }
+
+        const response = await fetch('/api/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'search',
+            email: currentUser.email,
+            criteria: criteria
+          })
+        });
+
+        const result = await response.json();
+        
+        if (response.ok) {
+          showStatus(`Search completed! ${result.results_count} results sent to ${currentUser.email}`, 'success');
+          // Update user data
+          currentUser = result.user;
+          showUserDashboard();
+        } else {
+          showStatus(result.error || 'Search failed', 'error');
+        }
+      } catch (error) {
+        console.error('Search error:', error);
+        showStatus('Network error. Please try again.', 'error');
+      } finally {
+        searchButton.disabled = false;
+        searchButton.textContent = 'Search & Email Results';
+      }
+    }
+
+    async function upgradeSubscription() {
+      try {
+        showStatus('Redirecting to payment...', 'info');
+        
+        const response = await fetch('/api/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'upgrade',
+            email: currentUser.email
+          })
+        });
+
+        const result = await response.json();
+        
+        if (response.ok && result.checkout_url) {
+          window.location.href = result.checkout_url;
+        } else {
+          showStatus(result.error || 'Upgrade failed', 'error');
+        }
+      } catch (error) {
+        console.error('Upgrade error:', error);
+        showStatus('Network error. Please try again.', 'error');
+      }
+    }
+
+    function logout() {
+      currentUser = null;
+      document.getElementById('authSection').classList.remove('hidden');
+      document.getElementById('userSection').classList.add('hidden');
+      document.getElementById('searchSection').classList.add('hidden');
+      document.getElementById('email').value = '';
+      document.getElementById('password').value = '';
+      document.getElementById('keywords').value = '';
+      document.getElementById('years').value = '';
+      document.getElementById('ic').value = '';
+      showStatus('Logged out successfully', 'success');
+    }
+
+    async function resetSearches() {
+      if (!currentUser) {
+        showStatus('Please login first', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'reset',
+            email: currentUser.email
+          })
+        });
+
+        const result = await response.json();
+        
+        if (response.ok) {
+          currentUser = result.user;
+          showUserDashboard();
+          showStatus('Search counter reset! You can search again.', 'success');
+        } else {
+          showStatus(result.error || 'Reset failed', 'error');
+        }
+      } catch (error) {
+        console.error('Reset error:', error);
+        showStatus('Network error. Please try again.', 'error');
+      }
+    }
+  </script>
 </body>
 </html>

@@ -1,0 +1,13 @@
+{
+  "name": "nih-reporter-scoop",
+  "version": "1.0.0",
+  "description": "AI-powered NIH research discovery with email delivery and subscription tiers",
+  "scripts": {
+    "dev": "wrangler pages dev . --binding USERS_KV=test-kv --port 8788 --compatibility-date=2024-01-01",
+    "deploy": "wrangler pages deploy .",
+    "test": "open http://localhost:8788"
+  },
+  "keywords": ["nih", "research", "email", "stripe", "cloudflare"],
+  "author": "Your Name",
+  "license": "MIT"
+}

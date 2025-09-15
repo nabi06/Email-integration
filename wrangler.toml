@@ -1,0 +1,25 @@
+# Cloudflare Pages configuration
+name = "email-pay"
+compatibility_date = "2024-01-01"
+
+# KV namespace bindings
+[[kv_namespaces]]
+binding = "USERS_KV"
+id = "your-kv-namespace-id"
+preview_id = "your-preview-kv-namespace-id"
+
+# Environment variables for development
+[env.development.vars]
+# These will be loaded from .dev.vars file
+# BREVO_API_KEY = "your-brevo-api-key"
+# STRIPE_SECRET_KEY = "your-stripe-secret-key"
+# STRIPE_PRICE_ID = "your-stripe-price-id"
+# SENDER_EMAIL = "your-sender-email"
+
+# Environment variables for production
+[env.production.vars]
+# Set these in Cloudflare dashboard
+# BREVO_API_KEY = "your-brevo-api-key"
+# STRIPE_SECRET_KEY = "your-stripe-secret-key"
+# STRIPE_PRICE_ID = "your-stripe-price-id"
+# SENDER_EMAIL = "your-sender-email"
